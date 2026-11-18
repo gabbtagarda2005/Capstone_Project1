@@ -11,7 +11,6 @@ import { isFastPulse, makeBusDivIcon } from "@/lib/locationsMapUtils";
 import { swalAlert, swalConfirm } from "@/lib/swal";
 import type { AttendantVerifiedSummary, BusLiveLogRow, BusRow, CorridorRouteRow, TicketRow } from "@/lib/types";
 import { useToast } from "@/context/ToastContext";
-import { GpsSourceStatusPanel } from "@/components/GpsSourceStatusPanel";
 import "./BusDetailPage.css";
 
 const BUK_CENTER: [number, number] = [8.0515, 125.0];
@@ -790,11 +789,6 @@ export function BusDetailPage() {
               </>
             ) : null}
           </div>
-          {bus?.busId ? (
-            <div style={{ marginTop: 10 }}>
-              <GpsSourceStatusPanel busId={bus.busId} />
-            </div>
-          ) : null}
           {congestionSegments.length > 0 ? (
             <div className="bus-hub__congestion-bar">
               <CorridorTrafficLoadBar label="Recent road conditions" segments={congestionSegments} />
