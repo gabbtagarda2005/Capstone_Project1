@@ -123,8 +123,8 @@ export async function fetchPassengerNotificationFeed(): Promise<PassengerNotific
     if (trip.trackingLost && trip.status !== "cancelled") {
       out.push({
         id: `track-${trip.id}`,
-        title: "Live tracking",
-        body: `${busLabel} — GPS signal is weak or paused. Arrival times may update when the bus reconnects.`,
+        title: "Bus location unavailable",
+        body: `We can't get ${busLabel}'s current location right now. Arrival times will update once it's back online.`,
         timeLabel: "Live board",
         kind: "schedule",
         sentAtMs: null,
@@ -136,10 +136,10 @@ export async function fetchPassengerNotificationFeed(): Promise<PassengerNotific
       (Number.isFinite(Number(eta)) && Number(eta) <= 14 && Boolean(terminal));
     if (near && !seenArrival.has(trip.id)) {
       seenArrival.add(trip.id);
-      const etaBit = Number.isFinite(Number(eta)) ? `ETA about ${Math.max(0, Math.round(Number(eta)))} min` : "Approaching";
+      const etaBit = Number.isFinite(Number(eta)) ? `arriving in about ${Math.max(0, Math.round(Number(eta)))} min` : "approaching";
       out.push({
         id: `arrival-${trip.id}`,
-        title: "Bus nearing your corridor",
+        title: "Bus arriving soon",
         body: `${busLabel} · ${route} — ${etaBit}${terminal ? ` toward ${terminal}.` : "."}`,
         timeLabel: trip.departureTime || fmtTime(board.serverTime),
         kind: "arrival",

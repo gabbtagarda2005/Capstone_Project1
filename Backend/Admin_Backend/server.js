@@ -974,6 +974,12 @@ mongoose
   .then(async () => {
     console.log("MongoDB connected (admin-api)");
     try {
+      const { initLiveDispatchStore } = require("./services/liveDispatchStore");
+      await initLiveDispatchStore();
+    } catch (e) {
+      console.warn("[live-dispatch] store init failed:", e.message);
+    }
+    try {
       const { initAdminAuthLockout } = require("./services/adminAuthLockout");
       await initAdminAuthLockout();
     } catch (e) {

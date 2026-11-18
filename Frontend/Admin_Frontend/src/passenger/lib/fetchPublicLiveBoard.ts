@@ -7,6 +7,8 @@ export type PublicLiveBoardItem = {
   etaMinutes: number | null;
   nextTerminal: string | null;
   status?: string;
+  /** Raw published schedule (HH:mm) — the original timetable slot, not the live-status clock. */
+  scheduledDeparture?: string | null;
 };
 
 export async function fetchPublicLiveBoard(): Promise<PublicLiveBoardItem[]> {
@@ -17,8 +19,14 @@ export async function fetchPublicLiveBoard(): Promise<PublicLiveBoardItem[]> {
 /** Prefer the smallest ETA when a bus appears on multiple board rows. */
 export function bestEtaByBusId(
   items: PublicLiveBoardItem[]
-): Map<string, { eta: number | null; nextTerminal: string | null; status: string | null }> {
-  const m = new Map<string, { eta: number | null; nextTerminal: string | null; status: string | null }>();
+): Map<
+  string,
+  { eta: number | null; nextTerminal: string | null; status: string | null; scheduledDeparture: string | null }
+> {
+  const m = new Map<
+    string,
+    { eta: number | null; nextTerminal: string | null; status: string | null; scheduledDeparture: string | null }
+  >();
   for (const it of items) {
     const bid = String(it.busId ?? "").trim();
     if (!bid) continue;
@@ -27,9 +35,10 @@ export function bestEtaByBusId(
       etaRaw != null && Number.isFinite(Number(etaRaw)) ? Math.max(0, Math.round(Number(etaRaw))) : null;
     const nextTerminal = it.nextTerminal?.trim() || null;
     const status = it.status?.trim() || null;
+    const scheduledDeparture = it.scheduledDeparture?.trim() || null;
     const prev = m.get(bid);
     if (!prev || (eta != null && (prev.eta == null || eta < prev.eta))) {
-      m.set(bid, { eta, nextTerminal, status });
+      m.set(bid, { eta, nextTerminal, status, scheduledDeparture });
     }
   }
   return m;

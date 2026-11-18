@@ -11,6 +11,7 @@ import { isFastPulse, makeBusDivIcon } from "@/lib/locationsMapUtils";
 import { swalAlert, swalConfirm } from "@/lib/swal";
 import type { AttendantVerifiedSummary, BusLiveLogRow, BusRow, CorridorRouteRow, TicketRow } from "@/lib/types";
 import { useToast } from "@/context/ToastContext";
+import { GpsSourceStatusPanel } from "@/components/GpsSourceStatusPanel";
 import "./BusDetailPage.css";
 
 const BUK_CENTER: [number, number] = [8.0515, 125.0];
@@ -476,7 +477,7 @@ export function BusDetailPage() {
     if (!r.isConfirmed || !r.value) return;
     const c = corridors.find((x) => x._id === r.value);
     if (!c) return;
-    const routeStr = `${c.originLabel} → ${c.destLabel}`;
+    const routeStr = c.displayName?.trim() || `${c.originLabel} → ${c.destLabel}`;
     setBusy(true);
     try {
       await api(`/api/buses/${encodeURIComponent(bus.id)}`, {
@@ -789,30 +790,16 @@ export function BusDetailPage() {
               </>
             ) : null}
           </div>
+          {bus?.busId ? (
+            <div style={{ marginTop: 10 }}>
+              <GpsSourceStatusPanel busId={bus.busId} />
+            </div>
+          ) : null}
           {congestionSegments.length > 0 ? (
             <div className="bus-hub__congestion-bar">
               <CorridorTrafficLoadBar label="Recent road conditions" segments={congestionSegments} />
             </div>
           ) : null}
-        </div>
-
-        <div className="bus-hub__tile" style={{ gridColumn: "1 / -1" }}>
-          <div className="bus-hub__tile-label">Vehicle ID &amp; technical</div>
-          <div className="bus-hub__mono" style={{ lineHeight: 1.7 }}>
-            busId <strong style={{ color: "#fff" }}>{bus.busId}</strong>
-            <br />
-            IMEI <strong style={{ color: "#fff" }}>{bus.imei || "—"}</strong>
-            <br />
-            GPS (lat, lng){" "}
-            <strong className="bus-hub__mono" style={{ color: "#fff" }}>
-              {effectiveLive
-                ? `${effectiveLive.latitude.toFixed(6)}, ${effectiveLive.longitude.toFixed(6)}`
-                : "—"}
-            </strong>
-            <br />
-            Tickets (lifetime) <strong style={{ color: "#fff" }}>{bus.ticketsIssued}</strong> · Strict pickup{" "}
-            <strong style={{ color: "#fff" }}>{bus.strictPickup === true ? "on" : "off"}</strong>
-          </div>
         </div>
 
         <div className="bus-hub__tile" style={{ gridColumn: "1 / -1" }}>

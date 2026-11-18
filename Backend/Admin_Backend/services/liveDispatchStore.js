@@ -1,8 +1,6 @@
 const { randomUUID } = require("crypto");
-const fs = require("fs");
-const path = require("path");
-
-const DATA_PATH = path.join(__dirname, "..", "data", "live-dispatch.json");
+const LiveDispatchBlock = require("../models/LiveDispatchBlock");
+const LiveDispatchMeta = require("../models/LiveDispatchMeta");
 
 /**
  * departurePoint = terminal / place the bus departs from (shown on passenger board).
@@ -41,37 +39,61 @@ function deriveDeparturePoint(routeLabel, explicit) {
   return (parts[0] || s).trim() || "—";
 }
 
-function load() {
+/** Resolves once the in-memory `blocks`/`holidayBanner` state has loaded from MongoDB. Awaited by
+ *  server.js right after mongoose connects, before `server.listen` — every exported function here
+ *  stays synchronous (reads/writes the in-memory array) so none of their many call sites changed. */
+let readyResolve;
+const ready = new Promise((resolve) => {
+  readyResolve = resolve;
+});
+
+async function initLiveDispatchStore() {
   try {
-    if (fs.existsSync(DATA_PATH)) {
-      const raw = fs.readFileSync(DATA_PATH, "utf8");
-      const j = JSON.parse(raw);
-      const rawBlocks = Array.isArray(j.blocks) ? j.blocks : [];
-      const normalized = rawBlocks.map((b) => ({
-        ...b,
-        departurePoint: b.departurePoint || deriveDeparturePoint(b.routeLabel, null),
-      }));
-      blocks = dedupeBlocksPerBus(normalized);
-      holidayBanner = j.holidayBanner && typeof j.holidayBanner === "object" ? j.holidayBanner : null;
-      // Persist migration so stale duplicate rows do not come back on next reboot.
-      if (blocks.length !== rawBlocks.length) save();
-    }
-  } catch {
+    const [rawBlocks, meta] = await Promise.all([
+      LiveDispatchBlock.find({}).lean(),
+      LiveDispatchMeta.findById("singleton").lean(),
+    ]);
+    const normalized = rawBlocks.map((b) => {
+      const { _id, __v, ...rest } = b;
+      return { ...rest, departurePoint: rest.departurePoint || deriveDeparturePoint(rest.routeLabel, null) };
+    });
+    blocks = dedupeBlocksPerBus(normalized);
+    holidayBanner = meta && meta.holidayBanner && typeof meta.holidayBanner === "object" ? meta.holidayBanner : null;
+    // Persist migration so stale duplicate rows do not come back on next reboot.
+    if (blocks.length !== rawBlocks.length) save();
+  } catch (e) {
+    console.warn("[live-dispatch] initial load from MongoDB failed:", e.message);
     blocks = [];
     holidayBanner = null;
+  } finally {
+    readyResolve();
   }
 }
 
+/** Best-effort write-through to MongoDB. Not awaited by callers (matches the previous
+ *  fire-and-forget fs.writeFileSync behavior) — the in-memory array is already the source of
+ *  truth for every read within this process, so a slow/failed write never blocks a request. */
 function save() {
-  try {
-    fs.mkdirSync(path.dirname(DATA_PATH), { recursive: true });
-    fs.writeFileSync(DATA_PATH, JSON.stringify({ blocks, holidayBanner }, null, 2), "utf8");
-  } catch (e) {
-    console.warn("[live-dispatch] persist failed:", e.message);
-  }
+  const snapshotBlocks = blocks.map((b) => ({ ...b }));
+  const snapshotHolidayBanner = holidayBanner ? { ...holidayBanner } : null;
+  (async () => {
+    try {
+      const ids = snapshotBlocks.map((b) => b.id);
+      const ops = snapshotBlocks.map((b) => ({
+        updateOne: { filter: { id: b.id }, update: { $set: b }, upsert: true },
+      }));
+      ops.push({ deleteMany: { filter: { id: { $nin: ids.length ? ids : ["__none__"] } } } });
+      await LiveDispatchBlock.bulkWrite(ops);
+      await LiveDispatchMeta.updateOne(
+        { _id: "singleton" },
+        { $set: { holidayBanner: snapshotHolidayBanner } },
+        { upsert: true }
+      );
+    } catch (e) {
+      console.warn("[live-dispatch] persist failed:", e.message);
+    }
+  })();
 }
-
-load();
 
 function manilaTodayYmd() {
   return new Intl.DateTimeFormat("en-CA", {
@@ -407,6 +429,8 @@ function getHolidayBanner() {
 }
 
 module.exports = {
+  initLiveDispatchStore,
+  ready,
   listBlocks,
   createBlock,
   updateBlock,

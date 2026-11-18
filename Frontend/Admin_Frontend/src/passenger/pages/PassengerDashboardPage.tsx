@@ -482,7 +482,21 @@ type PassengerQuickEtaRow = {
   statusActive: boolean;
   statusLabel: string;
   routePath: string;
+  /** Published timetable slot (HH:mm, 24h) — not the live-status clock. */
+  scheduledDeparture: string | null;
 };
+
+/** "06:00" -> "6:00 AM" to match the admin Schedule board's display convention. */
+function formatScheduledDeparture(hm: string | null): string | null {
+  if (!hm) return null;
+  const parts = hm.split(":");
+  const h = parseInt(parts[0] ?? "", 10);
+  const m = parseInt(parts[1] ?? "", 10);
+  if (!Number.isFinite(h) || !Number.isFinite(m)) return null;
+  const period = h < 12 ? "AM" : "PM";
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  return `${h12}:${String(m).padStart(2, "0")} ${period}`;
+}
 
 function formatFleetRouteLine(bus: PublicFleetBus): string {
   const start = bus.routeStart?.trim();
@@ -634,6 +648,7 @@ function buildQuickEtaRows(fleet: PublicFleetBus[], live: PublicLiveBoardItem[])
         statusActive: st.active,
         statusLabel: st.label,
         routePath,
+        scheduledDeparture: rec?.scheduledDeparture ?? null,
       });
     }
     merged.sort((a, b) => a.etaMinutes - b.etaMinutes);
@@ -667,6 +682,7 @@ function buildQuickEtaRows(fleet: PublicFleetBus[], live: PublicLiveBoardItem[])
         statusActive: st.active,
         statusLabel: st.label,
         routePath,
+        scheduledDeparture: row.scheduledDeparture?.trim() || null,
       };
     });
 }
@@ -811,6 +827,13 @@ function PassengerQuickEtaTile({
         <p className="pd-spa-eta-tile__route-path">{row.routePath}</p>
         <span className="pd-spa-eta-tile__route-cap">ROUTE</span>
       </div>
+
+      {formatScheduledDeparture(row.scheduledDeparture) ? (
+        <div className="pd-spa-eta-tile__route-zone" aria-label="Scheduled departure">
+          <p className="pd-spa-eta-tile__route-path">{formatScheduledDeparture(row.scheduledDeparture)}</p>
+          <span className="pd-spa-eta-tile__route-cap">DEPARTS</span>
+        </div>
+      ) : null}
     </div>
   );
 

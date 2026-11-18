@@ -88,6 +88,10 @@ async function enrichItemsForPublic(rawBlocks) {
       etaMinutes: Number.isFinite(Number(b.etaMinutes)) ? Math.max(1, Math.round(Number(b.etaMinutes))) : null,
       etaTargetIso: b.etaTargetIso != null ? String(b.etaTargetIso) : null,
       nextTerminal: b.nextTerminal != null ? String(b.nextTerminal) : null,
+      /** Raw published schedule (HH:mm), unlike `departureTime` above which locks to the live
+       *  arrival clock or reads "ESTIMATED" — passenger UI uses this to show the original
+       *  timetable slot regardless of live status. */
+      scheduledDeparture: b.scheduledDeparture != null ? String(b.scheduledDeparture).trim() || null : null,
     });
   }
   return out;
