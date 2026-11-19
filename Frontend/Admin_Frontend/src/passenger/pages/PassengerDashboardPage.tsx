@@ -12,7 +12,12 @@ import {
 } from "@/passenger/components/PassengerDashboardSpaState";
 import { fetchPublicCompanyProfile } from "@/passenger/lib/fetchPublicCompanyProfile";
 import { fetchPublicFleetBuses, type PublicFleetBus } from "@/passenger/lib/fetchPublicFleetBuses";
-import { bestEtaByBusId, fetchPublicLiveBoard, type PublicLiveBoardItem } from "@/passenger/lib/fetchPublicLiveBoard";
+import {
+  bestEtaByBusId,
+  fetchPublicLiveBoard,
+  type PublicGpsStatus,
+  type PublicLiveBoardItem,
+} from "@/passenger/lib/fetchPublicLiveBoard";
 import { clearPassengerLocationGate, getPassengerLocationSession } from "@/passenger/lib/passengerLocationGate";
 import { fetchPassengerNotificationFeed, type PassengerNotificationItem } from "@/passenger/lib/passengerNotifications";
 import { isPassengerOnboardingSeen, setPassengerOnboardingSeen } from "@/passenger/lib/passengerOnboarding";
@@ -484,6 +489,19 @@ type PassengerQuickEtaRow = {
   routePath: string;
   /** Published timetable slot (HH:mm, 24h) — not the live-status clock. */
   scheduledDeparture: string | null;
+  /** "live" = real GPS-computed ETA; "scheduled" = estimated from the timetable because no
+   *  device has reported in yet; null = no estimate available either way. */
+  etaSource: "live" | "scheduled" | null;
+  /** Whether a device is actually reporting right now — independent of `statusActive`, which
+   *  reflects the trip's dispatch status, not its GPS. */
+  gpsStatus: PublicGpsStatus | null;
+};
+
+const GPS_STATUS_LABEL: Record<PublicGpsStatus, string> = {
+  connected: "GPS Connected",
+  fallback: "GPS Fallback (SMS)",
+  signal_lost: "GPS Signal Lost",
+  simulated: "GPS Simulated",
 };
 
 /** "06:00" -> "6:00 AM" to match the admin Schedule board's display convention. */
@@ -633,6 +651,9 @@ function buildQuickEtaRows(fleet: PublicFleetBus[], live: PublicLiveBoardItem[])
       const st = fleetStatusParts(bus);
       const bc = fleetBoardingCounts(bus);
       const routePath = formatFleetRouteLine(bus);
+      // boardEta already carries its own source tag from the dispatch board; a plain distance-based
+      // userEta fallback is always computed from the bus's current live position, so it's "live" too.
+      const etaSource = boardEta != null ? rec?.etaSource ?? "live" : userEta != null ? "live" : null;
       merged.push({
         key: bid,
         etaMinutes: effectiveEta,
@@ -649,6 +670,8 @@ function buildQuickEtaRows(fleet: PublicFleetBus[], live: PublicLiveBoardItem[])
         statusLabel: st.label,
         routePath,
         scheduledDeparture: rec?.scheduledDeparture ?? null,
+        etaSource,
+        gpsStatus: rec?.gpsStatus ?? null,
       });
     }
     merged.sort((a, b) => a.etaMinutes - b.etaMinutes);
@@ -683,6 +706,8 @@ function buildQuickEtaRows(fleet: PublicFleetBus[], live: PublicLiveBoardItem[])
         statusLabel: st.label,
         routePath,
         scheduledDeparture: row.scheduledDeparture?.trim() || null,
+        etaSource: row.etaSource ?? null,
+        gpsStatus: row.gpsStatus ?? null,
       };
     });
 }
@@ -738,6 +763,15 @@ function PassengerQuickEtaTile({
             <span className="pd-spa-eta-tile__status-pill-dot" aria-hidden />
             <span>{row.statusLabel}</span>
           </div>
+          {row.gpsStatus ? (
+            <div
+              className={`pd-spa-eta-tile__gps-pill pd-spa-eta-tile__gps-pill--${row.gpsStatus}`}
+              title="Dispatch status above is independent of this — a trip can stay active with no device reporting."
+            >
+              <span className="pd-spa-eta-tile__gps-pill-dot" aria-hidden />
+              <span>{GPS_STATUS_LABEL[row.gpsStatus]}</span>
+            </div>
+          ) : null}
         </div>
         <div
           className={
@@ -747,6 +781,11 @@ function PassengerQuickEtaTile({
         >
           <div className="pd-spa-eta-tile__hero-cap">ETA</div>
           <div className="pd-spa-eta-tile__hero-val">{heroMain}</div>
+          {row.etaSource ? (
+            <div className="pd-spa-eta-tile__hero-source">
+              {row.etaSource === "live" ? "Live ETA" : "Scheduled"}
+            </div>
+          ) : null}
         </div>
       </header>
 
